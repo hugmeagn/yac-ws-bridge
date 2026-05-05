@@ -1,55 +1,43 @@
 workflows:
-  maui-net10-altstore:
-    name: MAUI .NET 10 iOS (Unsigned)
-    max_build_duration: 60
+  maui-net10-ios:
+    name: MAUI .NET 10 iOS (AltStore)
     instance_type: mac_mini_m2
     environment:
       vars:
-        DOTNET_VERSION: "10.0" # Можно указать конкретную версию, например 10.0.100
-      xcode: latest # Для .NET 10 нужен актуальный Xcode
+        # Указываем пути согласно официальному гайду
+        DOTNET_PATH: $CM_BUILD_DIR/dotnet
+        DOTNET: $CM_BUILD_DIR/dotnet/dotnet
     scripts:
-      - name: Install .NET 10 & MAUI Workload
+      - name: Install .NET 10 SDK
         script: |
-          # 1. Скачиваем и запускаем скрипт установки .NET
-          wget https://dot.net
+          wget https://dot.net/v1/dotnet-install.sh
           chmod +x dotnet-install.sh
-          ./dotnet-install.sh --channel $DOTNET_VERSION --install-dir $HOME/.dotnet
-          
-          # 2. Настраиваем переменные окружения для текущей сессии
-          export DOTNET_ROOT=$HOME/.dotnet
-          export PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
-          
-          # 3. Устанавливаем MAUI (используем полный путь для надежности)
-          $DOTNET_ROOT/dotnet workload install maui --source https://nuget.org
-          
-          # 4. Сохраняем переменные для всех последующих шагов Codemagic
-          echo "export DOTNET_ROOT=$DOTNET_ROOT" >> $CM_ENV
-          echo "export PATH=$PATH" >> $CM_ENV
+          # Устанавливаем именно 10-ю версию в указанную папку
+          ./dotnet-install.sh --channel 10.0 --install-dir $DOTNET_PATH
 
-      - name: Build Unsigned iOS App
+      - name: Install MAUI Workload
         script: |
-          # Собираем бинарники без подписи под архитектуру iPhone (arm64)
-          # Флаг -f net10.0-ios должен соответствовать вашему .csproj
-          dotnet build -f net10.0-ios \
+          $DOTNET nuget locals all --clear
+          # Устанавливаем рабочую нагрузку для iOS и MAUI
+          $DOTNET workload install ios maui --source https://api.nuget.org/v3/index.json
+
+      - name: Build Unsigned App
+        script: |
+          # Собираем проект, используя переменную $DOTNET
+          $DOTNET build -f net10.0-ios \
             -c Release \
             -p:RuntimeIdentifier=ios-arm64 \
             -p:CodesignKey="" \
             -p:CodesignProvision="" \
-            -p:CodeSigningAllowed=false \
-            -p:IsAppSandbox=false
+            -p:CodeSigningAllowed=false
 
-      - name: Package for AltStore (.ipa)
+      - name: Package for AltStore
         script: |
-          # Очистка и создание структуры Payload
-          rm -rf Payload
           mkdir -p Payload
-          
-          # Копируем скомпилированное приложение (.app) в папку Payload
-          # Мы используем wildcard (*.app), чтобы не зависеть от названия проекта
+          # Копируем скомпилированный .app (используем wildcard)
           cp -r bin/Release/net10.0-ios/ios-arm64/*.app Payload/
-          
-          # Упаковываем всё в zip и меняем расширение на .ipa
-          zip -r MauiApp_Unsigned.ipa Payload
+          # Создаем .ipa для установки через AltStore
+          zip -r MauiApp_Net10.ipa Payload
           
     artifacts:
-      - "*.ipa" # Codemagic подтянет созданный файл для скачивания
+      - "*.ipa"
