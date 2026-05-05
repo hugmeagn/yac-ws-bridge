@@ -37,6 +37,7 @@
     <!-- Сomment out to disable silent audio background mode (keeps tunnel alive indefinitely).
          May cause App Store rejection. -->
     <DefineConstants>$(DefineConstants);IOS_BACKGROUND_AUDIO</DefineConstants>
+    <EnableCodeSigning>false</EnableCodeSigning>
   </PropertyGroup>
 
   <ItemGroup>
