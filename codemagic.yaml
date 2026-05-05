@@ -4,7 +4,6 @@ workflows:
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
-      dotnet: '10.0.x' 
       xcode: latest
     triggering:
       events:
@@ -13,14 +12,23 @@ workflows:
         - pattern: 'release/*'
           include: true
     scripts:
+      - name: Install .NET 10 SDK
+        script: |
+          # Скачиваем и устанавливаем .NET 10 SDK для macOS ARM64
+          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0
+          # Добавляем в PATH
+          echo 'export PATH="$HOME/.dotnet:$PATH"' >> $CM_ENV
+          # Проверяем версию
+          dotnet --version
       - name: Install MAUI workload
-        script: dotnet workload install maui
+        script: |
+          dotnet workload install maui
       - name: Build unsigned .ipa
         script: |
           cd client
           dotnet publish -f net10.0-ios -c Release \
             -p:BuildIpa=true \
             -p:RuntimeIdentifier=ios-arm64 \
-            -p:CodesignKey="" -p:CodesignProvision=""  # Отключаем подпись
+            -p:CodesignKey="" -p:CodesignProvision=""
     artifacts:
       - client/bin/Release/net10.0-ios/ios-arm64/publish/*.ipa
