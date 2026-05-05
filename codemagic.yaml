@@ -24,6 +24,7 @@ workflows:
 
       - name: Package for AltStore
         script: |
+          ls -R
           mkdir -p Payload
           cp -r maui-client/bin/Release/net10.0-ios/ios-arm64/*.app Payload/
           zip -r BridgeToFreedom_Net10.ipa Payload
