@@ -1,30 +1,28 @@
 workflows:
   maui-net10-ios:
-    name: MAUI .NET 10 iOS (AltStore)
+    name: Bridge to Freedom iOS (AltStore)
     instance_type: mac_mini_m2
     environment:
       vars:
-        # Указываем пути согласно официальному гайду
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET: $CM_BUILD_DIR/dotnet/dotnet
     scripts:
       - name: Install .NET 10 SDK
         script: |
-          wget https://dot.net/v1/dotnet-install.sh
+          wget https://dot.net
           chmod +x dotnet-install.sh
-          # Устанавливаем именно 10-ю версию в указанную папку
           ./dotnet-install.sh --channel 10.0 --install-dir $DOTNET_PATH
 
       - name: Install MAUI Workload
         script: |
           $DOTNET nuget locals all --clear
-          # Устанавливаем рабочую нагрузку для iOS и MAUI
-          $DOTNET workload install ios maui --source https://api.nuget.org/v3/index.json
+          $DOTNET workload install ios maui --source https://nuget.org
 
       - name: Build Unsigned App
         script: |
-          # Собираем проект, используя переменную $DOTNET
-          $DOTNET build -f net10.0-ios \
+          # Собираем проект из папки maui-client
+          $DOTNET build maui-client \
+            -f net10.0-ios \
             -c Release \
             -p:RuntimeIdentifier=ios-arm64 \
             -p:CodesignKey="" \
@@ -34,10 +32,10 @@ workflows:
       - name: Package for AltStore
         script: |
           mkdir -p Payload
-          # Копируем скомпилированный .app (используем wildcard)
-          cp -r bin/Release/net10.0-ios/ios-arm64/*.app Payload/
-          # Создаем .ipa для установки через AltStore
-          zip -r MauiApp_Net10.ipa Payload
+          # Копируем .app из выходной папки maui-client
+          cp -r maui-client/bin/Release/net10.0-ios/ios-arm64/*.app Payload/
+          # Создаем финальный .ipa
+          zip -r BridgeToFreedom_Net10.ipa Payload
           
     artifacts:
       - "*.ipa"
