@@ -20,7 +20,7 @@ workflows:
 
       - name: Build Unsigned App
         script: |
-          $DOTNET build maui-client -f net10.0-ios 
+          $DOTNET build maui-client -f net10.0-ios -r ios-arm64
 
       - name: Package for AltStore
         script: |
