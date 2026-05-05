@@ -14,11 +14,12 @@ workflows:
     scripts:
       - name: Install .NET 10 SDK
         script: |
-          # Скачиваем и устанавливаем .NET 10 SDK для macOS ARM64
+          # Скачиваем и устанавливаем .NET 10 SDK
           curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0
-          # Добавляем в PATH
-          echo 'export PATH="$HOME/.dotnet:$PATH"' >> $CM_ENV
-          # Проверяем версию
+          # Правильно экспортируем PATH через переменные окружения Codemagic
+          echo "PATH=$HOME/.dotnet:$PATH" >> $CM_ENV
+          # Загружаем новый PATH в текущий скрипт для проверки
+          export PATH="$HOME/.dotnet:$PATH"
           dotnet --version
       - name: Install MAUI workload
         script: |
