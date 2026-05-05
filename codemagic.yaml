@@ -20,13 +20,7 @@ workflows:
 
       - name: Build Unsigned App
         script: |
-          $DOTNET build maui-client \
-            -f net10.0-ios \
-            -c Release \
-            -p:RuntimeIdentifier=ios-arm64 \
-            -p:_EnableCodeSigning=False \
-            -p:CodesignKey="" \
-            -p:CodesignProvision=""
+          $DOTNET build maui-client -f net10.0-ios 
 
       - name: Package for AltStore
         script: |
