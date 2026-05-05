@@ -16,11 +16,10 @@ workflows:
       - name: Install MAUI Workload
         script: |
           $DOTNET nuget locals all --clear
-          $DOTNET workload install ios maui --source https://nuget.org
+          $DOTNET workload install ios maui
 
       - name: Build Unsigned App
         script: |
-          # Собираем проект из папки maui-client
           $DOTNET build maui-client \
             -f net10.0-ios \
             -c Release \
@@ -32,9 +31,8 @@ workflows:
       - name: Package for AltStore
         script: |
           mkdir -p Payload
-          # Копируем .app из выходной папки maui-client
+          # ИСПРАВЛЕНО: в папке ios-arm64 создаётся подпапка с именем проекта (maui-client.app)
           cp -r maui-client/bin/Release/net10.0-ios/ios-arm64/*.app Payload/
-          # Создаем финальный .ipa
           zip -r BridgeToFreedom_Net10.ipa Payload
           
     artifacts:
