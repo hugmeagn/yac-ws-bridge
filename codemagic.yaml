@@ -9,7 +9,7 @@ workflows:
     scripts:
       - name: Install .NET 10 SDK
         script: |
-          wget https://dot.net
+          wget https://dot.net/v1/dotnet-install.sh
           chmod +x dotnet-install.sh
           ./dotnet-install.sh --channel 10.0 --install-dir $DOTNET_PATH
 
