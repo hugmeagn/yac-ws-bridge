@@ -1,11 +1,9 @@
 workflows:
-  build-ios:
-    name: Build iOS (.ipa) for AltStore
-    # Среда сборки: мощный Mac Pro
+  build-ios-unsigned:
+    name: Build Unsigned iOS (.ipa) for AltStore
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
-      # Нам нужна 10-я версия .NET
       dotnet: '10.0.x' 
       xcode: latest
     triggering:
@@ -15,17 +13,14 @@ workflows:
         - pattern: 'release/*'
           include: true
     scripts:
-      # Шаг 1: Установка MAUI workload
-      # Так как .NET 10 будет предустановлен, просто доставляем maui
       - name: Install MAUI workload
         script: dotnet workload install maui
-      # Шаг 2: Сборка проекта
-      - name: Build .ipa
+      - name: Build unsigned .ipa
         script: |
           cd client
           dotnet publish -f net10.0-ios -c Release \
             -p:BuildIpa=true \
-            -p:RuntimeIdentifier=ios-arm64
+            -p:RuntimeIdentifier=ios-arm64 \
+            -p:CodesignKey="" -p:CodesignProvision=""  # Отключаем подпись
     artifacts:
-      # Собранный .ipa появится здесь
       - client/bin/Release/net10.0-ios/ios-arm64/publish/*.ipa
