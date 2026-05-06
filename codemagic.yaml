@@ -10,7 +10,7 @@ workflows:
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET: $CM_BUILD_DIR/dotnet/dotnet
     scripts:
-      - name: Install .NET 10 SDK (if not cached)
+      - name: Install .NET 10 SDK
         script: |
           if [ ! -f "$DOTNET" ]; then
             echo ".NET SDK not found in cache. Installing..."
@@ -27,11 +27,11 @@ workflows:
           $DOTNET nuget locals all --clear
           $DOTNET workload install ios maui
 
-      - name: Build Unsigned App
+      - name: Build App
         script: |
           $DOTNET build maui-client -f net10.0-ios -r ios-arm64
 
-      - name: Package for AltStore
+      - name: Zip to ipa
         script: |
           mkdir -p Payload
           cp -r maui-client/bin/Debug/net10.0-ios/ios-arm64/*.app Payload/.
@@ -39,3 +39,41 @@ workflows:
           
     artifacts:
       - "*.ipa"
+
+
+  maui-net10-android:
+    name: Bridge to Freedom Android (APK)
+    instance_type: mac_mini_m2
+    cache:
+      cache_paths:
+        - $CM_BUILD_DIR/dotnet
+    environment:
+      vars:
+        DOTNET_PATH: $CM_BUILD_DIR/dotnet
+        DOTNET: $CM_BUILD_DIR/dotnet/dotnet
+    scripts:
+      - name: Install .NET 10 SDK
+        script: |
+          if [ ! -f "$DOTNET" ]; then
+            echo ".NET SDK not found in cache. Installing..."
+            wget https://dot.net/v1/dotnet-install.sh
+            chmod +x dotnet-install.sh
+            ./dotnet-install.sh --channel 10.0 --install-dir $DOTNET_PATH
+          else
+            echo ".NET SDK found in cache. Skipping installation."
+          fi
+          $DOTNET --version
+
+      - name: Install MAUI Workload
+        script: |
+          $DOTNET nuget locals all --clear
+          $DOTNET workload install android maui
+
+      - name: Build and Sign APK
+        script: |
+          cd maui-client
+          $DOTNET publish -f net10.0-android -c Release
+
+    artifacts:
+      - maui-client/bin/Release/net10.0-android/publish/*.apk
+      
