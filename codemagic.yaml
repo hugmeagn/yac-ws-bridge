@@ -41,6 +41,9 @@ workflows:
       - "*.ipa"
 
 
+  # ─────────────────────────────────────────────────────────
+  # Android сборка (APK для прямой установки)
+  # ─────────────────────────────────────────────────────────
   maui-net10-android:
     name: Bridge to Freedom Android (APK)
     instance_type: mac_mini_m2
@@ -52,7 +55,7 @@ workflows:
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET: $CM_BUILD_DIR/dotnet/dotnet
     scripts:
-      - name: Install .NET 10 SDK
+      - name: Install .NET 10 SDK (if not cached)
         script: |
           if [ ! -f "$DOTNET" ]; then
             echo ".NET SDK not found in cache. Installing..."
@@ -68,6 +71,15 @@ workflows:
         script: |
           $DOTNET nuget locals all --clear
           $DOTNET workload install android maui
+
+      # НОВЫЙ ШАГ: установка Android SDK API 36
+      - name: Install Android SDK dependencies
+        script: |
+          cd maui-client
+          $DOTNET build -t:InstallAndroidDependencies \
+            -f net10.0-android \
+            "-p:AndroidSdkDirectory=/usr/local/share/android-sdk" \
+            -p:AcceptAndroidSdkLicenses=True
 
       - name: Build and Sign APK
         script: |
