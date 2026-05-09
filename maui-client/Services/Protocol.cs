@@ -26,6 +26,8 @@ public static class Protocol
     public const byte MsgData     = 0x20;
     public const byte MsgFin      = 0x21;
     public const byte MsgRst      = 0x22;
+	// UDP stream messages
+	public const byte MsgUDPData = 0x33;
 
     public static string MsgName(byte type) => type switch
     {
@@ -43,6 +45,7 @@ public static class Protocol
         MsgData     => "DATA",
         MsgFin      => "FIN",
         MsgRst      => "RST",
+		MsgUDPData => "UDP_DATA",
         _ => $"0x{type:X2}"
     };
 

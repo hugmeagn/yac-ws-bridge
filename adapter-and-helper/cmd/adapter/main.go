@@ -107,6 +107,9 @@ func main() {
 					sm.HandleRst(of.StreamID)
 				}
 			})
+		case protocol.MsgUDPData:
+			go handleUDPData(cfg, sm, f)
+			
 		default:
 			log.Printf("[WARN] unknown frame type=0x%02x stream=%d", f.Type, f.StreamID)
 		}
@@ -196,4 +199,63 @@ func handleOpen(cfg *config.Config, sm *streams.Manager, streamID uint32) {
 
 	log.Printf("[INFO] stream opened stream=%d target=%s", streamID, cfg.Target.Address)
 	sm.ReadLoop(s)
+}
+
+// UDP connection tracking
+var (
+	udpConnsMu sync.Mutex
+	udpConns   = make(map[uint32]net.Conn)
+)
+
+func handleUDPData(cfg *config.Config, sm *streams.Manager, f protocol.Frame) {
+	udpConnsMu.Lock()
+	conn, exists := udpConns[f.StreamID]
+	if !exists {
+		var err error
+		conn, err = net.Dial("udp", cfg.Target.Address)
+		if err != nil {
+			udpConnsMu.Unlock()
+			log.Printf("[WARN] UDP dial failed stream=%d err=%v", f.StreamID, err)
+			return
+		}
+		udpConns[f.StreamID] = conn
+		udpConnsMu.Unlock()
+
+		log.Printf("[INFO] UDP stream opened stream=%d target=%s", f.StreamID, cfg.Target.Address)
+
+		// Read responses from target and send back to helper
+		go func(sid uint32) {
+			buf := make([]byte, 65535)
+			for {
+				n, err := conn.Read(buf)
+				if err != nil {
+					udpConnsMu.Lock()
+					delete(udpConns, sid)
+					udpConnsMu.Unlock()
+					return
+				}
+				payload := make([]byte, n)
+				copy(payload, buf[:n])
+				if sendErr := sm.SendFrame(protocol.Frame{
+					Type:     protocol.MsgUDPData,
+					StreamID: sid,
+					Payload:  payload,
+				}); sendErr != nil {
+					log.Printf("[WARN] send UDP_DATA back failed stream=%d err=%v", sid, sendErr)
+					return
+				}
+			}
+		}(f.StreamID)
+	} else {
+		udpConnsMu.Unlock()
+	}
+
+	// Write datagram to target
+	if _, err := conn.Write(f.Payload); err != nil {
+		log.Printf("[WARN] UDP write failed stream=%d err=%v", f.StreamID, err)
+		udpConnsMu.Lock()
+		delete(udpConns, f.StreamID)
+		udpConnsMu.Unlock()
+		conn.Close()
+	}
 }

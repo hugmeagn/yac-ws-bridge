@@ -25,6 +25,7 @@ const (
 	MsgData     byte = 0x20
 	MsgFin      byte = 0x21
 	MsgRst      byte = 0x22
+	MsgUDAPData byte = 0x33
 )
 
 // Frame is a single protocol message.

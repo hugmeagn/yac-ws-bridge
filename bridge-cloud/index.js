@@ -307,7 +307,7 @@ async function handle(event, context) {
       console.log(`helper MESSAGE type=${msgName(type)} streamId=${streamId} seq=${seqId} len=${buf.length}`);
 
       // Stream frames (type >= 0x10): relay to adapter
-      if (type >= 0x10) {
+      if (type >= 0x10 || type === 0x33) {
         if (!adapterConnId) await ensurePeerKnown('adapter');
         if (adapterConnId) {
           console.log(`relay ${msgName(type)} streamId=${streamId} seq=${seqId} -> adapter ${adapterConnId} bytes=${buf.length}`);

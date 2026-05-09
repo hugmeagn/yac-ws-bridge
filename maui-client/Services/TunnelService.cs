@@ -41,6 +41,7 @@ public sealed class TunnelService : IDisposable
     public int PingIntervalMs { get; set; } = 30000;
     public bool WriteCoalescing { get; set; }
     public int WriteCoalescingDelayMs { get; set; } = 10;
+	public bool UdpEnabled { get; set; } = true;
 
     public bool IsRunning => _cts != null && !_cts.IsCancellationRequested;
 
@@ -103,6 +104,8 @@ public sealed class TunnelService : IDisposable
 
     public void Stop()
     {
+		try { _udpListener?.Close(); } catch { }
+		_udpListener = null;
         _stopping = true;
         Log("Stop requested.");
         var cts = _cts;
@@ -189,6 +192,12 @@ public sealed class TunnelService : IDisposable
 
                 // Start listener if not already running
                 EnsureListenerRunning(ct);
+				
+				// Start UDP listener if enabled
+				if (UdpEnabled)
+				{
+					EnsureUdpListenerRunning(ct);
+				}
 
                 // Start ping loop and read loop
                 using var pingCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -314,6 +323,13 @@ public sealed class TunnelService : IDisposable
                     if (_streams.TryGetValue(streamId, out var rs))
                         CloseStream(rs);
                     break;
+				case Protocol.MsgUDPData:
+					if (_udpListener != null && _udpEndpoints.TryGetValue(streamId, out var ep))
+					{
+						try { await _udpListener.SendAsync(payload, payload.Length, ep); }
+						catch (Exception ex) { Log($"UDP send to client error: {ex.Message}"); }
+					}
+    break;
             }
         }
         catch (Exception ex) { Log($"Frame error: {ex.Message}"); }
@@ -724,6 +740,7 @@ public sealed class TunnelService : IDisposable
         }
         _streams.Clear();
         _streamSeqs.Clear();
+		_udpEndpoints.Clear();
         CancelPendingOpens("close all");
     }
 
@@ -770,4 +787,53 @@ public sealed class TunnelService : IDisposable
         // Do NOT dispose _writeLock — it's reused across start/stop cycles
         // and background threads may still reference it.
     }
+	
+	private void EnsureUdpListenerRunning(CancellationToken ct)
+{
+    if (_udpListener != null) return;
+    Log("Starting UDP listener...");
+    _ = Task.Run(() => UdpListenerLoopAsync(ct), ct);
+}
+
+private async Task UdpListenerLoopAsync(CancellationToken ct)
+{
+    try
+    {
+        _udpListener = new UdpClient(new IPEndPoint(IPAddress.Parse(ListenAddress), ListenPort));
+        _udpListener.Client.ReceiveTimeout = 1000;
+        Log($"UDP listening on {ListenAddress}:{ListenPort}");
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var result = await _udpListener.ReceiveAsync(ct);
+                var key = result.RemoteEndPoint.ToString();
+                
+                // Use hash of remote endpoint as stream ID for UDP
+                var sid = (uint)key.GetHashCode();
+                
+                // Store mapping for inbound traffic
+                _udpEndpoints[sid] = result.RemoteEndPoint;
+
+                // Send UDP data through tunnel
+                await SendToPeerAsync(Protocol.Encode(Protocol.MsgUDPData, sid, NextSeq(sid), result.Buffer));
+            }
+            catch (SocketException) when (ct.IsCancellationRequested) { break; }
+            catch (ObjectDisposedException) when (ct.IsCancellationRequested) { break; }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                Log($"UDP receive error: {ex.Message}");
+            }
+        }
+    }
+    catch (Exception ex) { Log($"UDP listener error: {ex.Message}"); }
+    finally
+    {
+        try { _udpListener?.Close(); } catch { }
+        _udpListener = null;
+        Log("UDP listener stopped.");
+    }
+}
 }

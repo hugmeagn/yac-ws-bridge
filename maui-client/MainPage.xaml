@@ -83,6 +83,15 @@
                     <Switch x:Name="CoalesceSwitch" Grid.Column="1"
                             IsEnabled="{Binding IsNotRunning}" />
                 </Grid>
+				
+				<!-- UDP toggle -->
+				<Grid ColumnDefinitions="*,Auto">
+					<Label Text="UDP support (for VPN)"
+						   VerticalOptions="Center" FontSize="13" />
+					<Switch x:Name="UdpEnabledSwitch" Grid.Column="1"
+							IsEnabled="{Binding IsNotRunning}"
+							IsToggled="True" />
+				</Grid>
 
                 <!-- Connect / Disconnect Button -->
                 <Button x:Name="ConnectButton"

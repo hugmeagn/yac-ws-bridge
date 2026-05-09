@@ -163,7 +163,78 @@ func main() {
 		log.Fatalf("listen: %v", err)
 	}
 	log.Printf("[INFO] helper starting bridge=%s listen=%s relay=%v coalesce=%v", cfg.Bridge.URL, cfg.Listen.Address, relay, cfg.CoalesceDelay())
+	
+	// UDP listener on the same port as TCP
+go func() {
+	host, portStr, err := net.SplitHostPort(cfg.Listen.Address)
+	if err != nil {
+		log.Printf("[WARN] failed to parse listen address for UDP: %v", err)
+		return
+	}
+	udpAddrStr := net.JoinHostPort(host, portStr)
+	udpAddr, err := net.ResolveUDPAddr("udp", udpAddrStr)
+	if err != nil {
+		log.Printf("[WARN] resolve UDP addr: %v", err)
+		return
+	}
+	udpConn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		log.Printf("[WARN] listen UDP: %v", err)
+		return
+	}
+	log.Printf("[INFO] UDP listener started on %s", udpAddrStr)
+	handleUDP(ctx, udpConn, sm)
+}()
 
+// handleUDP reads UDP datagrams and sends them through the tunnel.
+func handleUDP(ctx context.Context, conn *net.UDPConn, sm *streams.Manager) {
+	buf := make([]byte, 65535)
+	udpStreams := make(map[string]uint32)
+	var mu sync.Mutex
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		n, remoteAddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("[WARN] UDP read error: %v", err)
+			return
+		}
+
+		key := remoteAddr.String()
+		mu.Lock()
+		sid, exists := udpStreams[key]
+		if !exists {
+			sid = sm.NextID()
+			udpStreams[key] = sid
+			log.Printf("[INFO] new UDP stream src=%s stream=%d", key, sid)
+		}
+		mu.Unlock()
+
+		payload := make([]byte, n)
+		copy(payload, buf[:n])
+
+		if err := sm.SendFrame(protocol.Frame{
+			Type:     protocol.MsgUDPData,
+			StreamID: sid,
+			Payload:  payload,
+		}); err != nil {
+			log.Printf("[WARN] send UDP_DATA failed stream=%d err=%v", sid, err)
+		}
+	}
+}
+	
 	// Accept loop in background
 	go func() {
 		for {
