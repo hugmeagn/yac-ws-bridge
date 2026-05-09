@@ -7,10 +7,11 @@ adapter-and-helper/adapter
 adapter-and-helper/adapter.exe
 adapter-and-helper/helper
 adapter-and-helper/helper.exe
+adapter-and-helper/test.py
 
 # Config with secrets
 adapter.config.yaml
-!adapter-and-helper/adapter.config.yaml
+adapter-and-helper/adapter.config.yaml
 helper.config.yaml
 !adapter-and-helper/helper.config.yaml
 
@@ -22,3 +23,4 @@ Thumbs.db
 .vscode
 maui-client/bin
 maui-client/obj
+

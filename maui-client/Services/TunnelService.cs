@@ -18,6 +18,8 @@ public sealed class TunnelService : IDisposable
     private volatile bool _stopping;
     private ClientWebSocket? _upstream;
     private TcpListener? _listener;
+	private UdpClient? _udpListener;
+	private readonly ConcurrentDictionary<uint, IPEndPoint> _udpEndpoints = new();
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     // State
@@ -253,7 +255,7 @@ public sealed class TunnelService : IDisposable
 
                 var data = new byte[totalRead];
                 Buffer.BlockCopy(buffer, 0, data, 0, totalRead);
-                HandleFrame(data);
+                await HandleFrame(data);
             }
             catch (OperationCanceledException) { return; }
             catch (WebSocketException) { return; }
@@ -261,79 +263,79 @@ public sealed class TunnelService : IDisposable
         }
     }
 
-    private void HandleFrame(byte[] data)
-    {
-        try
-        {
-            var (type, streamId, _, payload) = Protocol.Decode(data);
+    private async Task HandleFrame(byte[] data)
+	{
+		try
+		{
+			var (type, streamId, _, payload) = Protocol.Decode(data);
 
-            switch (type)
-            {
-                case Protocol.MsgPeerConn:
-                    var (peerId, iamToken) = Protocol.DecodePeerConn(payload);
-                    if (peerId == _staleConnId && peerId != "")
-                    {
-                        Log($"PEER_CONN with stale ID {Shorten(peerId)}, ignoring");
-                        return;
-                    }
-                    _staleConnId = "";
-                    // Cancel pending opens from previous peer session
-                    CancelPendingOpens("new peer connected");
-                    _peerConnId = peerId;
-                    if (iamToken != "") _iamToken = iamToken;
-                    Log($"Peer connected: {Shorten(peerId)}");
-                    break;
+			switch (type)
+			{
+				case Protocol.MsgPeerConn:
+					var (peerId, iamToken) = Protocol.DecodePeerConn(payload);
+					if (peerId == _staleConnId && peerId != "")
+					{
+						Log($"PEER_CONN with stale ID {Shorten(peerId)}, ignoring");
+						return;
+					}
+					_staleConnId = "";
+					CancelPendingOpens("new peer connected");
+					_peerConnId = peerId;
+					if (iamToken != "") _iamToken = iamToken;
+					Log($"Peer connected: {Shorten(peerId)}");
+					break;
 
-                case Protocol.MsgPeerGone:
-                    Log($"Peer gone, closing {_streams.Count} streams");
-                    _peerConnId = "";
-                    CancelPendingOpens("peer gone");
-                    CloseAllStreams();
-                    break;
+				case Protocol.MsgPeerGone:
+					Log($"Peer gone, closing {_streams.Count} streams");
+					_peerConnId = "";
+					CancelPendingOpens("peer gone");
+					CloseAllStreams();
+					break;
 
-                case Protocol.MsgPong:
-                    var token = Protocol.DecodePong(payload);
-                    if (token != "") _iamToken = token;
-                    break;
+				case Protocol.MsgPong:
+					var token = Protocol.DecodePong(payload);
+					if (token != "") _iamToken = token;
+					break;
 
-                case Protocol.MsgOpenOK:
-                case Protocol.MsgOpenFail:
-                    if (_pendingOpens.TryRemove(streamId, out var tcs))
-                        tcs.TrySetResult(data);
-                    else
-                        Log($"{Protocol.MsgName(type)} for unknown stream={streamId}");
-                    break;
+				case Protocol.MsgOpenOK:
+				case Protocol.MsgOpenFail:
+					if (_pendingOpens.TryRemove(streamId, out var tcs))
+						tcs.TrySetResult(data);
+					else
+						Log($"{Protocol.MsgName(type)} for unknown stream={streamId}");
+					break;
 
-                case Protocol.MsgData:
-                    if (_streams.TryGetValue(streamId, out var s) && !s.Closed)
-                    {
-                        try { s.NetStream.Write(payload, 0, payload.Length); }
-                        catch { CloseStream(s); }
-                    }
-                    break;
+				case Protocol.MsgData:
+					if (_streams.TryGetValue(streamId, out var s) && !s.Closed)
+					{
+						try { await s.NetStream.WriteAsync(payload, 0, payload.Length); }
+						catch { CloseStream(s); }
+					}
+					break;
 
-                case Protocol.MsgFin:
-                    Log($"FIN stream={streamId}");
-                    if (_streams.TryGetValue(streamId, out var fs))
-                        CloseStream(fs);
-                    break;
+				case Protocol.MsgFin:
+					Log($"FIN stream={streamId}");
+					if (_streams.TryGetValue(streamId, out var fs))
+						CloseStream(fs);
+					break;
 
-                case Protocol.MsgRst:
-                    Log($"RST stream={streamId}");
-                    if (_streams.TryGetValue(streamId, out var rs))
-                        CloseStream(rs);
-                    break;
+				case Protocol.MsgRst:
+					Log($"RST stream={streamId}");
+					if (_streams.TryGetValue(streamId, out var rs))
+						CloseStream(rs);
+					break;
+
 				case Protocol.MsgUDPData:
 					if (_udpListener != null && _udpEndpoints.TryGetValue(streamId, out var ep))
 					{
 						try { await _udpListener.SendAsync(payload, payload.Length, ep); }
 						catch (Exception ex) { Log($"UDP send to client error: {ex.Message}"); }
 					}
-    break;
-            }
-        }
-        catch (Exception ex) { Log($"Frame error: {ex.Message}"); }
-    }
+					break;
+			}
+		}
+		catch (Exception ex) { Log($"Frame error: {ex.Message}"); }
+	}
 
     // --- TCP Listener ---
 

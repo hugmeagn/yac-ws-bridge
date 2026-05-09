@@ -1,8 +1,8 @@
 # Adapter — accepts streams from the bridge and forwards them to a local target.
 
 bridge:
-  url: "wss://YOUR_APIGW_ID.apigw.yandexcloud.net/_adapter"
-  authToken: "YOUR_AUTH_TOKEN"
+  url: "wss://d5dfehgnbbdj568fqdcq.iwzqm34r.apigw.yandexcloud.net/X0EiQ09yfDph/QF1KIzJQWk93"
+  authToken: "y0__wgBEOGFsvYFGMHdEyDlt9GpF4srdFn3K5TQg9IL45Z7nZK5PvIc"
   reconnect:
     initialDelayMs: 1000
     maxDelayMs: 30000
